@@ -2,6 +2,7 @@ import re
 from getConfig import CONFIG
 import json
 import os
+import shutil
 
 
 def replace_text(file_path):
@@ -68,6 +69,13 @@ def merge_jsons(file1_base, file2_base, output_file):
     with open(output_file, 'w', encoding='utf-8') as file:
         json.dump(merged_content, file, ensure_ascii=False, indent=2)
 
+    return merged_content
+
+
+def looks_cleaned(content):
+    # Признак того, что на вход попал уже очищенный replace_text файл (повторный запуск)
+    return any(isinstance(v, str) and ('{{Rubi|' in v or '{{Color|' in v) for v in content.values())
+
 
 repl_langs = ["CHS", "CHT", "ZHS", "ZHT", "DE", "EN", "ES", "FR", "ID", "JA", "JP", "KO", "KR", "PT", "RU", "TH", "VI", "TR", "IT"]
 merge_langs = {
@@ -86,12 +94,24 @@ merge_langs = {
     "VI": ["MainVI", "VI"],
 }
 
+# Сырые (неочищенные) тексты для ExcelMap.ts: он сам форматирует их под каждый язык
+RAW_DIR = f'{CONFIG.DATA_PATH}/TextMap/Raw'
+os.makedirs(RAW_DIR, exist_ok=True)
+
 for lang, files in merge_langs.items():
-    merge_jsons(
+    out_path = f'{CONFIG.DATA_PATH}/TextMap/TextMap{lang}.json'
+    merged = merge_jsons(
         f'{CONFIG.DATA_PATH}/TextMap/TextMap{files[0]}',
         f'{CONFIG.DATA_PATH}/TextMap/TextMap{files[1]}',
-        f'{CONFIG.DATA_PATH}/TextMap/TextMap{lang}.json'
+        out_path
     )
+    if looks_cleaned(merged):
+        print(f'[{lang}] input already cleaned, TextMap/Raw/TextMap{lang}.json NOT updated '
+              f'(put fresh game data to refresh it)')
+    else:
+        shutil.copyfile(out_path, f'{RAW_DIR}/TextMap{lang}.json')
+        print(f'[{lang}] raw copy saved to {RAW_DIR}')
+    del merged
 
 for n in range(0, len(repl_langs)):
     replace_text(f'{CONFIG.DATA_PATH}/TextMap/TextMap' + repl_langs[n] + ".json")
